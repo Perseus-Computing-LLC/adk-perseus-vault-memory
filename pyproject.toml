@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adk-mimir-memory"
+version = "0.2.0"
+authors = [
+    { name = "Thomas Connally", email = "51974392+tcconnally@users.noreply.github.com" },
+]
+description = "Persistent, local, encrypted cross-session memory for Google ADK agents — backed by Mimir."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Intended Audience :: Developers",
+]
+dependencies = [
+    "google-adk>=1.0.0",
+]
+
+[project.optional-dependencies]
+perseus = ["perseus-ctx"]
+
+[project.urls]
+Homepage = "https://github.com/Perseus-Computing-LLC/adk-mimir-memory"
+Repository = "https://github.com/Perseus-Computing-LLC/adk-mimir-memory"
+"Bug Tracker" = "https://github.com/Perseus-Computing-LLC/adk-mimir-memory/issues"
