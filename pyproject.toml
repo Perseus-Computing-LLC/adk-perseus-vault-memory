@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "adk-mimir-memory"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
     { name = "Thomas Connally", email = "51974392+tcconnally@users.noreply.github.com" },
 ]
@@ -25,10 +25,14 @@ classifiers = [
 ]
 dependencies = [
     "google-adk>=1.0.0",
+    # override is used for the BaseMemoryService overrides; stdlib typing.override
+    # only exists on 3.12+, so the backport is required on 3.10/3.11.
+    "typing-extensions>=4.4.0",
 ]
 
 [project.optional-dependencies]
-perseus = ["perseus-ctx"]
+perseus = ["perseus-ctx>=1.0.10"]
+test = ["pytest>=7.0"]
 
 [project.urls]
 Homepage = "https://github.com/Perseus-Computing-LLC/adk-mimir-memory"

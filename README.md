@@ -35,15 +35,22 @@ cargo install mimir
 
 ```python
 from google.adk.agents import Agent
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 from adk_mimir_memory import MimirMemoryService
 
 agent = Agent(
     name="my_agent",
     model="gemini-2.5-flash",
     instruction="You are a helpful assistant with persistent memory.",
-    memory_service=MimirMemoryService(
-        db_path="~/.adk/mimir.db",
-    ),
+)
+
+# The memory service is configured on the Runner, not on the Agent.
+runner = Runner(
+    agent=agent,
+    app_name="my_app",
+    session_service=InMemorySessionService(),
+    memory_service=MimirMemoryService(db_path="~/.adk/mimir.db"),
 )
 ```
 
@@ -70,16 +77,23 @@ MimirMemoryService(
 This package also includes a drop-in agent with live workspace awareness via [Perseus](https://github.com/Perseus-Computing-LLC/perseus):
 
 ```python
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 from adk_mimir_memory.perseus_context import perseus_context_agent
 
-# The agent resolves @file, @search, @memory directives at inference time
+# The agent resolves @file, @search, @memory directives at inference time.
+# Bind it on the Runner; run_async takes no `agent` argument.
+runner = Runner(
+    agent=perseus_context_agent,
+    app_name="my_app",
+    session_service=InMemorySessionService(),
+)
 runner.run_async(
     user_id="user",
     session_id="session",
     new_message=types.Content(role="user", parts=[types.Part.from_text(
         text="What does the README say about deployment?"
     )]),
-    agent=perseus_context_agent,
 )
 ```
 

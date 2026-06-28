@@ -13,29 +13,32 @@ Requirements:
 Usage::
 
     from adk_mimir_memory import MimirMemoryService
-    from google.adk.memory import InMemoryMemoryService
+    from google.adk.runners import Runner
 
-    # Swap out the default in-memory service for persistent Mimir
-    agent = Agent(
-        name="my_agent",
-        memory_service=MimirMemoryService(
-            db_path="~/.adk/mimir.db",
-        ),
+    # The memory service is configured on the Runner (not on the Agent).
+    runner = Runner(
+        agent=my_agent,
+        app_name="my_app",
+        session_service=my_session_service,
+        memory_service=MimirMemoryService(db_path="~/.adk/mimir.db"),
     )
 """
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import json
 import logging
 import os
+import queue
 import shutil
 import subprocess
 import threading
+import time
 from collections.abc import Mapping
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from typing_extensions import override
@@ -55,8 +58,8 @@ _MIMIR_CATEGORY = "adk-memory"
 
 
 def _format_timestamp(timestamp: float) -> str:
-    """Formats a unix timestamp as an ISO 8601 string."""
-    return datetime.fromtimestamp(timestamp).isoformat()
+    """Formats a unix timestamp as a UTC ISO 8601 string."""
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
 
 
 class MimirMemoryService(BaseMemoryService):
@@ -77,6 +80,7 @@ class MimirMemoryService(BaseMemoryService):
         self,
         db_path: str = "~/.adk/mimir.db",
         mimir_binary: str = "mimir",
+        timeout_s: float = 30.0,
     ):
         """Initializes the Mimir memory service.
 
@@ -85,12 +89,15 @@ class MimirMemoryService(BaseMemoryService):
                 ``~/.adk/mimir.db``.
             mimir_binary: Name or absolute path of the ``mimir`` executable.
                 Defaults to ``mimir`` (resolved from ``$PATH``).
+            timeout_s: Maximum time to wait for any single Mimir RPC response.
+                Guards against a hung subprocess blocking the agent forever.
 
         Raises:
             RuntimeError: If the ``mimir`` binary cannot be found or the
                 subprocess fails to start.
         """
         self.db_path = os.path.expanduser(db_path)
+        self._timeout_s = timeout_s
 
         # Resolve the mimir binary.
         if os.path.isabs(mimir_binary):
@@ -108,18 +115,39 @@ class MimirMemoryService(BaseMemoryService):
         # Ensure the database directory exists.
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
 
-        # Start the Mimir MCP stdio subprocess.
+        # Start the Mimir MCP stdio subprocess. stderr is discarded: nothing
+        # drains it, so a chatty server filling the OS pipe buffer would block on
+        # its stderr write while we wait on stdout (a two-pipe deadlock).
         self._proc = subprocess.Popen(
             [self._mimir_binary, "--db", self.db_path],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             text=True,
         )
         self._lock = threading.Lock()
         self._request_id = 0
 
-        # Initialize the MCP session.
+        # Background reader: pump stdout lines into a queue so _rpc can wait with a
+        # timeout and correlate responses by id, rather than blocking forever on a
+        # bare readline().
+        self._recv: queue.Queue = queue.Queue()
+        proc_stdout = self._proc.stdout
+
+        def _pump() -> None:
+            try:
+                for line in proc_stdout:
+                    self._recv.put(line)
+            except Exception:
+                pass
+            finally:
+                self._recv.put(None)  # EOF sentinel
+
+        self._reader = threading.Thread(target=_pump, daemon=True)
+        self._reader.start()
+
+        # Initialize the MCP session, then send the required initialized
+        # notification (per the MCP spec) before any tools/call.
         self._rpc(
             "initialize",
             {
@@ -128,6 +156,7 @@ class MimirMemoryService(BaseMemoryService):
                 "clientInfo": {"name": "adk-mimir-memory-service", "version": "1.0"},
             },
         )
+        self._notify("notifications/initialized", {})
 
         # Clean up the subprocess on exit.
         atexit.register(self._close)
@@ -160,39 +189,70 @@ class MimirMemoryService(BaseMemoryService):
         Raises:
             RuntimeError: If the RPC returns an error.
         """
-        req = {
-            "jsonrpc": "2.0",
-            "id": self._next_id(),
-            "method": method,
-            "params": params,
-        }
-        payload = json.dumps(req, default=str)
-
         with self._lock:
+            req_id = self._next_id()
+            req = {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "method": method,
+                "params": params,
+            }
+            payload = json.dumps(req, default=str)
             try:
                 self._proc.stdin.write(payload + "\n")
                 self._proc.stdin.flush()
-                raw = self._proc.stdout.readline()
             except (BrokenPipeError, OSError) as e:
                 raise RuntimeError(
                     f"Mimir subprocess communication failed: {e}. "
                     "The mimir process may have crashed."
                 ) from e
 
-        try:
-            resp = json.loads(raw)
-        except json.JSONDecodeError as e:
-            raise RuntimeError(
-                f"Failed to parse Mimir response: {e}. Raw: {raw[:200]}"
-            ) from e
+            # Wait for the reply with this id, honoring a deadline. Skip
+            # notifications (no id) and replies to other ids. The lock is held
+            # for the whole exchange so request/response pairs never interleave.
+            deadline = time.monotonic() + self._timeout_s
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RuntimeError(
+                        f"Mimir RPC '{method}' timed out after {self._timeout_s}s."
+                    )
+                try:
+                    raw = self._recv.get(timeout=remaining)
+                except queue.Empty:
+                    raise RuntimeError(
+                        f"Mimir RPC '{method}' timed out after {self._timeout_s}s."
+                    )
+                if raw is None:
+                    raise RuntimeError(
+                        "Mimir subprocess closed its output (it may have crashed)."
+                    )
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    resp = json.loads(raw)
+                except json.JSONDecodeError:
+                    continue  # non-JSON noise on stdout
+                if resp.get("id") != req_id:
+                    continue  # notification or a stale/other reply
 
-        if "error" in resp:
-            err = resp["error"]
-            raise RuntimeError(
-                f"Mimir RPC error [{err.get('code')}]: {err.get('message')}"
-            )
+                if "error" in resp:
+                    err = resp["error"]
+                    raise RuntimeError(
+                        f"Mimir RPC error [{err.get('code')}]: {err.get('message')}"
+                    )
+                return resp.get("result", {})
 
-        return resp.get("result", {})
+    def _notify(self, method: str, params: object) -> None:
+        """Sends a JSON-RPC notification (no id, no response expected)."""
+        payload = json.dumps({"jsonrpc": "2.0", "method": method, "params": params})
+        with self._lock:
+            try:
+                self._proc.stdin.write(payload + "\n")
+                self._proc.stdin.flush()
+            except (BrokenPipeError, OSError):
+                pass
 
     def _call_tool(self, name: str, arguments: dict) -> dict:
         """Calls a Mimir MCP tool and returns the ``structuredContent``."""
@@ -255,7 +315,8 @@ class MimirMemoryService(BaseMemoryService):
         if not events_data:
             return
 
-        self._call_tool(
+        await asyncio.to_thread(
+            self._call_tool,
             "mimir_remember",
             {
                 "category": _MIMIR_CATEGORY,
@@ -313,12 +374,11 @@ class MimirMemoryService(BaseMemoryService):
         if not events_data:
             return
 
-        import time
-
         sid = session_id or "__unknown__"
         delta_key = f"delta:{app_name}:{user_id}:{sid}:{int(time.time() * 1000)}"
 
-        self._call_tool(
+        await asyncio.to_thread(
+            self._call_tool,
             "mimir_remember",
             {
                 "category": _MIMIR_CATEGORY,
@@ -359,13 +419,16 @@ class MimirMemoryService(BaseMemoryService):
             if not content_text:
                 continue
 
-            self._call_tool(
+            await asyncio.to_thread(
+                self._call_tool,
                 "mimir_remember",
                 {
                     "category": _MIMIR_CATEGORY,
                     "key": f"memory:{app_name}:{user_id}:{entry.id or i}",
                     "body_json": json.dumps({
                         "content": content_text,
+                        "app_name": app_name,
+                        "user_id": user_id,
                         "author": entry.author,
                         "timestamp": entry.timestamp,
                         "metadata": entry.custom_metadata,
@@ -384,8 +447,12 @@ class MimirMemoryService(BaseMemoryService):
     ) -> SearchMemoryResponse:
         """Searches Mimir for memories matching the query.
 
-        Uses Mimir's FTS5 keyword search.  Results are scoped to the given
-        application and user by filtering on the stored tags and body content.
+        Uses Mimir's FTS5 keyword search, then enforces per-(app, user)
+        isolation in-process: Mimir's recall OR's query terms together, so
+        scoping cannot be expressed by stuffing the app/user into the query
+        string (that both leaks other tenants' memories and dilutes relevance).
+        Instead the clean query is sent and every returned item is filtered to
+        the requesting ``app_name`` and ``user_id`` recorded in its body.
 
         Args:
             app_name: The application name for memory scope.
@@ -395,12 +462,13 @@ class MimirMemoryService(BaseMemoryService):
         Returns:
             A SearchMemoryResponse containing matching MemoryEntry objects.
         """
-        scoped_query = f"{query} {app_name} adk-memory {user_id}"
-        result = self._call_tool(
+        # Over-fetch a little since results are post-filtered by tenant.
+        result = await asyncio.to_thread(
+            self._call_tool,
             "mimir_recall",
             {
-                "query": scoped_query,
-                "limit": 20,
+                "query": query,
+                "limit": 50,
                 "category": _MIMIR_CATEGORY,
             },
         )
@@ -413,6 +481,15 @@ class MimirMemoryService(BaseMemoryService):
                 body_data = json.loads(body) if isinstance(body, str) else body
             except json.JSONDecodeError:
                 body_data = {}
+            if not isinstance(body_data, dict):
+                continue
+
+            # Tenant isolation: never surface another app's or user's memory.
+            if (
+                body_data.get("app_name") != app_name
+                or body_data.get("user_id") != user_id
+            ):
+                continue
 
             # Determine the best text content to surface.
             content_text = body_data.get("content", "")
