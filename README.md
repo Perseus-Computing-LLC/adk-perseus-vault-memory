@@ -1,8 +1,8 @@
 # ADK Mimir Memory
 
-Persistent, local, encrypted cross-session memory for [Google ADK](https://github.com/google/adk-python) agents — backed by [Mimir](https://github.com/Perseus-Computing-LLC/mimir).
+Persistent, local, encrypted cross-session memory for [Google ADK](https://github.com/google/adk-python) agents — backed by [Mneme](https://github.com/Perseus-Computing-LLC/mneme) (formerly "Mimir").
 
-## Why Mimir?
+## Why Mneme?
 
 | Backend | Dependencies | Encryption | Hybrid Search | Local |
 |---|---|---|---|---|
@@ -23,12 +23,12 @@ Persistent, local, encrypted cross-session memory for [Google ADK](https://githu
 pip install adk-mimir-memory
 ```
 
-This package requires the `mimir` binary. Download it from:
-https://github.com/Perseus-Computing-LLC/mimir/releases
+This package requires the `mimir`/`mneme` binary. Download it from:
+https://github.com/Perseus-Computing-LLC/mneme/releases
 
 Or build from source:
 ```bash
-cargo install mimir
+cargo install mneme
 ```
 
 ## Quick Start
@@ -117,7 +117,7 @@ session = await runner.session_service.create_session(
 
 ```
 ┌─────────────┐     JSON-RPC (MCP stdio)     ┌──────────┐
-│  ADK Agent  │ ──────────────────────────▶  │  Mimir   │
+│  ADK Agent  │ ──────────────────────────▶  │  Mneme   │
 │  (Python)   │ ◀──────────────────────────  │  (Rust)  │
 └─────────────┘                               └────┬─────┘
                                                    │
@@ -125,8 +125,8 @@ session = await runner.session_service.create_session(
                                               (AES-256-GCM)
 ```
 
-The `MimirMemoryService` spawns a `mimir` subprocess and communicates via JSON-RPC over stdin/stdout (MCP stdio transport). Each `add_session_to_memory`, `add_memory`, and `search_memory` call translates to a Mimir MCP tool invocation.
+The `MimirMemoryService` spawns a `mimir` subprocess and communicates via JSON-RPC over stdin/stdout (MCP stdio transport). Each `add_session_to_memory`, `add_memory`, and `search_memory` call translates to a Mneme MCP tool invocation.
 
 ## License
 
-MIT — see [Mimir](https://github.com/Perseus-Computing-LLC/mimir) and [Perseus](https://github.com/Perseus-Computing-LLC/perseus) for the backing services.
+MIT — see [Mneme](https://github.com/Perseus-Computing-LLC/mneme) and [Perseus](https://github.com/Perseus-Computing-LLC/perseus) for the backing services.
