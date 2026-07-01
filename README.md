@@ -1,8 +1,8 @@
 # ADK Mimir Memory
 
-Persistent, local, encrypted cross-session memory for [Google ADK](https://github.com/google/adk-python) agents — backed by [Mneme](https://github.com/Perseus-Computing-LLC/mneme) (formerly "Mimir").
+Persistent, local, encrypted cross-session memory for [Google ADK](https://github.com/google/adk-python) agents — backed by [Perseus Vault](https://github.com/Perseus-Computing-LLC/perseus-vault) (formerly "Mimir"/"Mneme").
 
-## Why Mneme?
+## Why Perseus Vault?
 
 | Backend | Dependencies | Encryption | Hybrid Search | Local |
 |---|---|---|---|---|
@@ -23,12 +23,12 @@ Persistent, local, encrypted cross-session memory for [Google ADK](https://githu
 pip install adk-mimir-memory
 ```
 
-This package requires the `mimir`/`mneme` binary. Download it from:
-https://github.com/Perseus-Computing-LLC/mneme/releases
+This package requires the `mimir`/`perseus-vault` binary. Download it from:
+https://github.com/Perseus-Computing-LLC/perseus-vault/releases
 
 Or build from source:
 ```bash
-cargo install mneme
+cargo install perseus-vault
 ```
 
 ## Quick Start
@@ -116,17 +116,17 @@ session = await runner.session_service.create_session(
 ## How It Works
 
 ```
-┌─────────────┐     JSON-RPC (MCP stdio)     ┌──────────┐
-│  ADK Agent  │ ──────────────────────────▶  │  Mneme   │
-│  (Python)   │ ◀──────────────────────────  │  (Rust)  │
-└─────────────┘                               └────┬─────┘
-                                                   │
-                                              SQLite + FTS5
-                                              (AES-256-GCM)
+┌─────────────┐     JSON-RPC (MCP stdio)     ┌────────────────┐
+│  ADK Agent  │ ──────────────────────────▶  │  Perseus Vault │
+│  (Python)   │ ◀──────────────────────────  │  (Rust)        │
+└─────────────┘                              └───────┬────────┘
+                                                      │
+                                                 SQLite + FTS5
+                                                 (AES-256-GCM)
 ```
 
-The `MimirMemoryService` spawns a `mimir` subprocess and communicates via JSON-RPC over stdin/stdout (MCP stdio transport). Each `add_session_to_memory`, `add_memory`, and `search_memory` call translates to a Mneme MCP tool invocation.
+The `MimirMemoryService` spawns a `mimir` subprocess and communicates via JSON-RPC over stdin/stdout (MCP stdio transport). Each `add_session_to_memory`, `add_memory`, and `search_memory` call translates to a Perseus Vault MCP tool invocation.
 
 ## License
 
-MIT — see [Mneme](https://github.com/Perseus-Computing-LLC/mneme) and [Perseus](https://github.com/Perseus-Computing-LLC/perseus) for the backing services.
+MIT — see [Perseus Vault](https://github.com/Perseus-Computing-LLC/perseus-vault) and [Perseus](https://github.com/Perseus-Computing-LLC/perseus) for the backing services.
