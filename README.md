@@ -1,5 +1,7 @@
 # ADK Perseus Vault Memory
 
+> **📦 Package renamed.** Previously published on PyPI as [`adk-mimir-memory`](https://pypi.org/project/adk-mimir-memory/) (now archived). This project is now [`adk-perseus-vault-memory`](https://pypi.org/project/adk-perseus-vault-memory/) — install with `pip install adk-perseus-vault-memory`.
+
 Persistent, local, encrypted cross-session memory for [Google ADK](https://github.com/google/adk-python) agents — backed by [Perseus Vault](https://github.com/Perseus-Computing-LLC/perseus-vault) (formerly "Mimir"/"Mneme").
 
 ## Why Perseus Vault?
