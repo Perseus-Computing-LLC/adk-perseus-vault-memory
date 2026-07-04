@@ -1,9 +1,9 @@
-"""Tests for MimirMemoryService against a fake Mimir MCP stdio server.
+"""Tests for PerseusVaultMemoryService against a fake Perseus Vault MCP stdio server.
 
-No real ``mimir`` binary is required: ``subprocess.Popen`` is monkeypatched to
-return an in-process fake that speaks JSON-RPC 2.0 over fake stdin/stdout pipes
-and models Mimir's recall OR-semantics, so these exercise the real RPC, async,
-and tenant-isolation code paths.
+No real ``perseus-vault`` binary is required: ``subprocess.Popen`` is
+monkeypatched to return an in-process fake that speaks JSON-RPC 2.0 over fake
+stdin/stdout pipes and models Perseus Vault's recall OR-semantics, so these
+exercise the real RPC, async, and tenant-isolation code paths.
 """
 
 from __future__ import annotations
@@ -17,11 +17,11 @@ import pytest
 from google.genai import types
 from google.adk.memory.memory_entry import MemoryEntry
 
-import adk_mimir_memory.mimir_memory_service as svc_mod
-from adk_mimir_memory import MimirMemoryService
+import adk_perseus_vault_memory.perseus_vault_memory_service as svc_mod
+from adk_perseus_vault_memory import PerseusVaultMemoryService
 
 
-# ── Fake Mimir MCP stdio server ────────────────────────────────────────────
+# ── Fake Perseus Vault MCP stdio server ─────────────────────────────────────
 
 
 class _FakeStdin:
@@ -62,8 +62,8 @@ class _FakeStdout:
         self._q.put(None)
 
 
-class FakeMimir:
-    """Minimal Popen-compatible fake of the Mimir MCP stdio server.
+class FakeVault:
+    """Minimal Popen-compatible fake of the Perseus Vault MCP stdio server.
 
     Options:
         answer_tools: if False, tools/call requests get no response (to test
@@ -103,10 +103,10 @@ class FakeMimir:
             params = req["params"]
             name = params["name"]
             args = params["arguments"]
-            if name == "mimir_remember":
+            if name == "perseus_vault_remember":
                 self.store[(args["category"], args["key"])] = args
                 self._respond(rid, {"structuredContent": {"stored": True}})
-            elif name == "mimir_recall":
+            elif name == "perseus_vault_recall":
                 q = args.get("query", "").lower().split()
                 cat = args.get("category")
                 items = []
@@ -114,7 +114,7 @@ class FakeMimir:
                     if cat and c != cat:
                         continue
                     body = rec["body_json"]
-                    # Model Mimir's OR semantics: match if ANY query word appears.
+                    # Model Perseus Vault's OR semantics: match if ANY query word appears.
                     if any(w in body.lower() for w in q):
                         items.append({"body_json": body, "created_at_unix_ms": 0})
                 self._respond(rid, {"structuredContent": {"items": items}})
@@ -143,13 +143,13 @@ class FakeMimir:
 
 
 def _make_service(monkeypatch, tmp_path, **fake_kwargs):
-    fake = FakeMimir(**fake_kwargs)
+    fake = FakeVault(**fake_kwargs)
     monkeypatch.setattr(svc_mod.subprocess, "Popen", lambda *a, **k: fake)
-    db = tmp_path / "mimir.db"
+    db = tmp_path / "vault.db"
     # Use a platform-absolute path so __init__ skips the $PATH lookup.
-    fake_bin = str(tmp_path / "fake-mimir")
-    service = MimirMemoryService(
-        db_path=str(db), mimir_binary=fake_bin, timeout_s=1.0
+    fake_bin = str(tmp_path / "fake-perseus-vault")
+    service = PerseusVaultMemoryService(
+        db_path=str(db), vault_binary=fake_bin, timeout_s=1.0
     )
     return service, fake
 
@@ -173,7 +173,7 @@ def test_init_completes_handshake(monkeypatch, tmp_path):
 
 def test_tenant_isolation_search(monkeypatch, tmp_path):
     """A search must never return another app's or user's memories, even though
-    Mimir's recall OR-matches the shared query term."""
+    Perseus Vault's recall OR-matches the shared query term."""
     service, _fake = _make_service(monkeypatch, tmp_path)
 
     asyncio.run(

@@ -1,4 +1,4 @@
-# ADK Mimir Memory
+# ADK Perseus Vault Memory
 
 Persistent, local, encrypted cross-session memory for [Google ADK](https://github.com/google/adk-python) agents — backed by [Perseus Vault](https://github.com/Perseus-Computing-LLC/perseus-vault) (formerly "Mimir"/"Mneme").
 
@@ -9,7 +9,7 @@ Persistent, local, encrypted cross-session memory for [Google ADK](https://githu
 | **InMemoryMemoryService** | None | ❌ | ❌ | ✅ |
 | **VertexAiMemoryBankService** | GCP + Gemini | ❌ | Gemini-driven | ❌ |
 | **VertexAiRagMemoryService** | GCP + RAG | ❌ | GCP vector | ❌ |
-| **MimirMemoryService** | **Single binary** | **✅ AES-256** | **✅ BM25+FTS5+Dense** | **✅** |
+| **PerseusVaultMemoryService** | **Single binary** | **✅ AES-256** | **✅ BM25+FTS5+Dense** | **✅** |
 
 - **Zero cloud dependencies** — a single Rust binary, SQLite database, fully local
 - **AES-256-GCM encryption** at rest — your memory data stays private
@@ -20,10 +20,10 @@ Persistent, local, encrypted cross-session memory for [Google ADK](https://githu
 ## Installation
 
 ```bash
-pip install adk-mimir-memory
+pip install adk-perseus-vault-memory
 ```
 
-This package requires the `mimir`/`perseus-vault` binary. Download it from:
+This package requires the `perseus-vault` binary. Download it from:
 https://github.com/Perseus-Computing-LLC/perseus-vault/releases
 
 Or build from source:
@@ -37,7 +37,7 @@ cargo install perseus-vault
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from adk_mimir_memory import MimirMemoryService
+from adk_perseus_vault_memory import PerseusVaultMemoryService
 
 agent = Agent(
     name="my_agent",
@@ -50,7 +50,7 @@ runner = Runner(
     agent=agent,
     app_name="my_app",
     session_service=InMemorySessionService(),
-    memory_service=MimirMemoryService(db_path="~/.adk/mimir.db"),
+    memory_service=PerseusVaultMemoryService(db_path="~/.adk/vault.db"),
 )
 ```
 
@@ -60,15 +60,15 @@ That's it. Sessions, events, and explicit memories are now persisted across rest
 
 ```python
 # Custom database location
-MimirMemoryService(db_path="/data/agent_memory.db")
+PerseusVaultMemoryService(db_path="/data/agent_memory.db")
 
-# Custom mimir binary path (if not on $PATH)
-MimirMemoryService(mimir_binary="/usr/local/bin/mimir")
+# Custom perseus-vault binary path (if not on $PATH)
+PerseusVaultMemoryService(vault_binary="/usr/local/bin/perseus-vault")
 
 # Both
-MimirMemoryService(
+PerseusVaultMemoryService(
     db_path="/data/agent_memory.db",
-    mimir_binary="/usr/local/bin/mimir",
+    vault_binary="/usr/local/bin/perseus-vault",
 )
 ```
 
@@ -79,7 +79,7 @@ This package also includes a drop-in agent with live workspace awareness via [Pe
 ```python
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from adk_mimir_memory.perseus_context import perseus_context_agent
+from adk_perseus_vault_memory.perseus_context import perseus_context_agent
 
 # The agent resolves @file, @search, @memory directives at inference time.
 # Bind it on the Runner; run_async takes no `agent` argument.
@@ -98,7 +98,7 @@ runner.run_async(
 ```
 
 ```bash
-pip install adk-mimir-memory[perseus]  # installs perseus-ctx
+pip install adk-perseus-vault-memory[perseus]  # installs perseus-ctx
 ```
 
 Set directives via session state:
@@ -125,7 +125,7 @@ session = await runner.session_service.create_session(
                                                  (AES-256-GCM)
 ```
 
-The `MimirMemoryService` spawns a `mimir` subprocess and communicates via JSON-RPC over stdin/stdout (MCP stdio transport). Each `add_session_to_memory`, `add_memory`, and `search_memory` call translates to a Perseus Vault MCP tool invocation.
+The `PerseusVaultMemoryService` spawns a `perseus-vault` subprocess and communicates via JSON-RPC over stdin/stdout (MCP stdio transport). Each `add_session_to_memory`, `add_memory`, and `search_memory` call translates to a Perseus Vault MCP tool invocation.
 
 ## License
 

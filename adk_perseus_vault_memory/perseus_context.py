@@ -13,7 +13,7 @@ This module provides a drop-in agent demonstrating the pattern:
 
 Usage::
 
-    from adk_mimir_memory.perseus_context import perseus_context_agent
+    from adk_perseus_vault_memory.perseus_context import perseus_context_agent
 
     # Use as a standalone agent
     runner.run_async(
