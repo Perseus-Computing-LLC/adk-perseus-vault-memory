@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/adk-mimir-memory
+      url: https://pypi.org/p/adk-perseus-vault-memory
     permissions:
       id-token: write
     steps:

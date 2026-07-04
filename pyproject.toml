@@ -3,12 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "adk-mimir-memory"
+name = "adk-perseus-vault-memory"
 version = "0.3.0"
 authors = [
     { name = "Thomas Connally", email = "51974392+tcconnally@users.noreply.github.com" },
 ]
-description = "Persistent, local, encrypted cross-session memory for Google ADK agents — backed by Mimir."
+description = "Persistent, local, encrypted cross-session memory for Google ADK agents — backed by Perseus Vault."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
@@ -22,6 +22,14 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Intended Audience :: Developers",
+]
+keywords = [
+    "google-adk",
+    "adk",
+    "memory",
+    "perseus-vault",
+    "agent-memory",
+    "mcp",
 ]
 dependencies = [
     "google-adk>=1.0.0",
@@ -38,3 +46,4 @@ test = ["pytest>=7.0"]
 Homepage = "https://github.com/Perseus-Computing-LLC/adk-mimir-memory"
 Repository = "https://github.com/Perseus-Computing-LLC/adk-mimir-memory"
 "Bug Tracker" = "https://github.com/Perseus-Computing-LLC/adk-mimir-memory/issues"
+"Perseus Vault" = "https://github.com/Perseus-Computing-LLC/perseus-vault"

@@ -3,4 +3,5 @@ dist/
 __pycache__/
 *.pyc
 .env
+.vault/
 .mimir/
